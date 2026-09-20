@@ -11,7 +11,7 @@ interface HuntboardApi {
   googleDisconnect: () => Promise<{ ok: boolean }>;
   initSpreadsheet: () => Promise<{ ok: boolean; error?: string }>;
   syncSheets: () => Promise<{ ok: boolean; error?: string }>;
-  careerNavigate: (url: string) => Promise<{ ok: boolean }>;
+  getCaptureScript: () => Promise<string>;
   saveQuestionBank: (p: unknown) => Promise<{ ok: boolean; error?: string }>;
   suggestMerge: (prompt: string) => Promise<
     Array<{ id: string; prompt_display: string }>
@@ -48,6 +48,12 @@ declare global {
   interface Window {
     huntboard: HuntboardApi;
   }
+}
+
+if (!window.huntboard) {
+  document.body.innerHTML =
+    '<div class="boot-error"><h1>Huntboard failed to start</h1><p>The preload bridge is missing. From the repo root run <code>npm run build</code> then <code>npm start</code>.</p></div>';
+  throw new Error("huntboard preload missing");
 }
 
 const api = window.huntboard;
@@ -152,9 +158,48 @@ document.getElementById("btnSync")!.addEventListener("click", async () => {
   authStatus.textContent = res.ok ? "Synced." : `Error: ${res.error}`;
 });
 
-document.getElementById("btnGo")!.addEventListener("click", async () => {
-  const url = careerUrl.value.trim();
-  if (url) await api.careerNavigate(url);
+type CareerWebview = HTMLElement & {
+  src: string;
+  executeJavaScript: (code: string) => Promise<unknown>;
+};
+
+const careerView = document.getElementById("careerView") as CareerWebview;
+const careerForm = document.getElementById("careerForm") as HTMLFormElement;
+
+careerForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  let url = careerUrl.value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  careerView.src = url;
+});
+
+careerView.addEventListener("did-navigate", (e) => {
+  const ev = e as Event & { url?: string };
+  if (ev.url && !ev.url.startsWith("data:")) careerUrl.value = ev.url;
+});
+
+let captureScript = "";
+careerView.addEventListener("dom-ready", () => {
+  if (!captureScript) return;
+  void careerView.executeJavaScript(captureScript).catch(() => {});
+});
+void api.getCaptureScript().then((script) => {
+  captureScript = script;
+});
+
+careerView.addEventListener("console-message", (e) => {
+  const ev = e as Event & { message?: string };
+  const prefix = "__HUNTBOARD_FIELD__:";
+  const message = ev.message ?? "";
+  if (!message.startsWith(prefix)) return;
+  try {
+    const payload = JSON.parse(message.slice(prefix.length)) as FieldCapture;
+    if (dismissedPrompts.has(payload.prompt)) return;
+    void openCaptureDialog(payload);
+  } catch {
+    /* ignore */
+  }
 });
 
 document.getElementById("btnSaveTemplate")!.addEventListener("click", async () => {

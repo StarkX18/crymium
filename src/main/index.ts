@@ -1,10 +1,4 @@
-import {
-  app,
-  BrowserWindow,
-  BrowserView,
-  ipcMain,
-  session,
-} from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -34,18 +28,15 @@ import {
 } from "../shared/resolver.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const isDev = !app.isPackaged;
+const useVite = process.argv.includes("--dev");
 
 let mainWindow: BrowserWindow | null = null;
-let careerView: BrowserView | null = null;
 
 let cache = {
   profile: {} as Record<string, string>,
   templates: new Map<string, string>(),
   bank: [] as import("../shared/resolver.js").QuestionBankRow[],
 };
-
-const CAREER_PARTITION = "persist:huntboard-careers";
 
 function getOAuthClient() {
   const settings = loadSettings();
@@ -56,73 +47,78 @@ function preloadPath(): string {
   return path.join(__dirname, "../../dist-preload/preload/index.js");
 }
 
-function injectCaptureScript(view: BrowserView): void {
-  const scriptPath = isDev
-    ? path.join(app.getAppPath(), "src/main/inject/capture-listener.js")
-    : path.join(__dirname, "inject/capture-listener.js");
-  const script = fs.readFileSync(scriptPath, "utf8");
-  view.webContents.executeJavaScript(script).catch(() => {});
+function rendererHtmlPath(): string {
+  return path.join(__dirname, "../../dist-renderer/index.html");
 }
 
-function layoutViews(): void {
-  if (!mainWindow || !careerView) return;
-  const [w, h] = mainWindow.getContentSize();
-  const sidebar = 380;
-  careerView.setBounds({ x: sidebar, y: 0, width: w - sidebar, height: h });
+function captureScriptPath(): string {
+  const fromSrc = path.join(app.getAppPath(), "src/main/inject/capture-listener.js");
+  const fromDist = path.join(__dirname, "inject/capture-listener.js");
+  return fs.existsSync(fromSrc) ? fromSrc : fromDist;
+}
+
+async function loadRenderer(win: BrowserWindow): Promise<void> {
+  const file = rendererHtmlPath();
+  if (useVite) {
+    try {
+      await win.loadURL("http://127.0.0.1:5173");
+      return;
+    } catch (err) {
+      console.error("Vite dev server unavailable, falling back to built UI", err);
+    }
+  }
+  if (!fs.existsSync(file)) {
+    await win.loadURL(
+      "data:text/html;charset=utf-8," +
+        encodeURIComponent(`<!doctype html>
+<html><body style="font-family:system-ui;padding:24px">
+<h1>Huntboard UI is not built</h1>
+<p>From the repo root run:</p>
+<pre>npm run build
+npm start</pre>
+</body></html>`)
+    );
+    return;
+  }
+  await win.loadFile(file);
 }
 
 function createWindow(): void {
+  const preload = preloadPath();
+  if (!fs.existsSync(preload)) {
+    dialog.showErrorBox(
+      "Huntboard",
+      "Preload script missing. Run npm run build, then npm start."
+    );
+  }
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
+    backgroundColor: "#f4f4f5",
+    show: false,
     webPreferences: {
-      preload: preloadPath(),
+      preload,
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true,
+      sandbox: false,
     },
     title: "Huntboard",
   });
 
-  careerView = new BrowserView({
-    webPreferences: {
-      partition: CAREER_PARTITION,
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-  mainWindow.setBrowserView(careerView);
-  layoutViews();
-  mainWindow.on("resize", layoutViews);
-
-  careerView.webContents.setWindowOpenHandler(({ url }) => {
-    careerView?.webContents.loadURL(url);
-    return { action: "deny" };
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
   });
 
-  careerView.webContents.on("did-finish-load", () => {
-    injectCaptureScript(careerView!);
-  });
-
-  careerView.webContents.on("console-message", (_e, _level, message) => {
-    const prefix = "__HUNTBOARD_FIELD__:";
-    if (!message.startsWith(prefix)) return;
-    try {
-      const payload = JSON.parse(message.slice(prefix.length));
-      mainWindow?.webContents.send("field-captured", payload);
-    } catch {
-      /* ignore */
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    console.error("Renderer failed to load", { code, desc, url });
+    if (useVite && url.includes("5173")) {
+      void mainWindow?.loadFile(rendererHtmlPath()).catch(() => {});
     }
   });
 
-  if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
-  } else {
-    mainWindow.loadFile(
-      path.join(__dirname, "../../dist-renderer/index.html")
-    );
-  }
-
-  careerView.webContents.loadURL("about:blank");
+  void loadRenderer(mainWindow);
 }
 
 async function refreshCacheFromSheets(): Promise<void> {
@@ -203,9 +199,12 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle("career-navigate", (_e, url: string) => {
-    careerView?.webContents.loadURL(url);
-    return { ok: true };
+  ipcMain.handle("get-capture-script", () => {
+    try {
+      return fs.readFileSync(captureScriptPath(), "utf8");
+    } catch {
+      return "";
+    }
   });
 
   ipcMain.handle("save-question-bank", async (_e, payload) => {
@@ -216,8 +215,7 @@ function registerIpc(): void {
       return { ok: false, error: "Not connected to Google." };
     }
     const id = `q_${Date.now()}`;
-    const pattern =
-      payload.pattern || draftMatchPattern(payload.prompt);
+    const pattern = payload.pattern || draftMatchPattern(payload.prompt);
     const row = [
       payload.mergeId || id,
       payload.prompt,

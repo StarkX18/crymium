@@ -33,10 +33,17 @@ Use **Node 20 or 22 LTS** (not Node 25/26). Electron downloads a platform binary
 nvm install 22
 nvm use 22
 npm install
+npm run build
+npm start
+```
+
+Hot reload (Vite) — only if you need it:
+
+```bash
 npm run dev
 ```
 
-Production build:
+If you see a **blank white window**, you were loading Vite while it was not running, or a career overlay covered the UI. Use `npm start` after `npm run build`.
 
 ```bash
 npm run build

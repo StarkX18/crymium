@@ -7,59 +7,78 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header>
-      <h1>Huntboard</h1>
-      <p class="tagline">Sheets-backed queue · persistent career session</p>
-    </header>
+    <div class="app">
+      <aside class="sidebar">
+        <header>
+          <h1>Huntboard</h1>
+          <p class="tagline">Sheets-backed queue · persistent career session</p>
+        </header>
 
-    <nav class="tabs">
-      <button type="button" data-tab="setup" class="active">Setup</button>
-      <button type="button" data-tab="browse">Browse</button>
-      <button type="button" data-tab="templates">Templates</button>
-      <button type="button" data-tab="bank">Question bank</button>
-    </nav>
+        <nav class="tabs">
+          <button type="button" data-tab="setup" class="active">Setup</button>
+          <button type="button" data-tab="browse">Browse</button>
+          <button type="button" data-tab="templates">Templates</button>
+          <button type="button" data-tab="bank">Question bank</button>
+        </nav>
 
-    <section id="panel-setup" class="panel active">
-      <h2>Google Sheets</h2>
-      <p class="hint">
-        Create a spreadsheet in Google Drive, copy its ID from the URL, and
-        register an OAuth <strong>Desktop</strong> client in Google Cloud Console.
-      </p>
-      <label>Spreadsheet ID <input id="spreadsheetId" type="text" /></label>
-      <label>OAuth Client ID <input id="clientId" type="text" /></label>
-      <label>OAuth Client secret <input id="clientSecret" type="password" /></label>
-      <div class="row">
-        <button type="button" id="btnSaveSettings">Save settings</button>
-        <button type="button" id="btnConnect" class="primary">Connect Google</button>
-        <button type="button" id="btnDisconnect">Disconnect</button>
-      </div>
-      <p id="authStatus" class="status"></p>
-      <div class="row">
-        <button type="button" id="btnInitSheet">Initialize tabs &amp; defaults</button>
-        <button type="button" id="btnSync">Sync from Sheets</button>
-      </div>
-    </section>
+        <section id="panel-setup" class="panel active">
+          <h2>Google Sheets</h2>
+          <p class="hint">
+            Create a spreadsheet in Google Drive, copy its ID from the URL, and
+            register an OAuth <strong>Desktop</strong> client in Google Cloud Console.
+          </p>
+          <label>Spreadsheet ID <input id="spreadsheetId" type="text" /></label>
+          <label>OAuth Client ID <input id="clientId" type="text" /></label>
+          <label>OAuth Client secret <input id="clientSecret" type="password" /></label>
+          <div class="row">
+            <button type="button" id="btnSaveSettings">Save settings</button>
+            <button type="button" id="btnConnect" class="primary">Connect Google</button>
+            <button type="button" id="btnDisconnect">Disconnect</button>
+          </div>
+          <p id="authStatus" class="status">Loading…</p>
+          <div class="row">
+            <button type="button" id="btnInitSheet">Initialize tabs &amp; defaults</button>
+            <button type="button" id="btnSync">Sync from Sheets</button>
+          </div>
+        </section>
 
-    <section id="panel-browse" class="panel">
-      <h2>Career browser</h2>
-      <p class="hint">Log into portals on the right. Sessions persist in this app.</p>
-      <label>URL <input id="careerUrl" type="url" placeholder="https://boards.greenhouse.io/..." /></label>
-      <button type="button" id="btnGo" class="primary">Open</button>
-    </section>
+        <section id="panel-browse" class="panel">
+          <h2>Career browser</h2>
+          <p class="hint">Use the bar on the right. Logins persist in this app.</p>
+        </section>
 
-    <section id="panel-templates" class="panel">
-      <h2>Templates</h2>
-      <label for="templateSelect">Template</label>
-      <select id="templateSelect"><option value="why_company">why_company</option></select>
-      <textarea id="templateBody" rows="12"></textarea>
-      <button type="button" id="btnSaveTemplate" class="primary">Save to Sheet</button>
-    </section>
+        <section id="panel-templates" class="panel">
+          <h2>Templates</h2>
+          <label for="templateSelect">Template</label>
+          <select id="templateSelect"><option value="why_company">why_company</option></select>
+          <textarea id="templateBody" rows="12"></textarea>
+          <button type="button" id="btnSaveTemplate" class="primary">Save to Sheet</button>
+        </section>
 
-    <section id="panel-bank" class="panel">
-      <h2>Question bank</h2>
-      <p id="bankCount" class="status">Sync to load entries.</p>
-      <ul id="bankList"></ul>
-    </section>
+        <section id="panel-bank" class="panel">
+          <h2>Question bank</h2>
+          <p id="bankCount" class="status">Sync to load entries.</p>
+          <ul id="bankList"></ul>
+        </section>
+      </aside>
+
+      <section class="career">
+        <form class="career-bar" id="careerForm">
+          <input
+            id="careerUrl"
+            type="url"
+            placeholder="https://boards.greenhouse.io/..."
+          />
+          <button type="submit" class="primary" id="btnGo">Open</button>
+        </form>
+        <webview
+          id="careerView"
+          partition="persist:huntboard-careers"
+          allowpopups
+          src="data:text/html;charset=utf-8,<html><body style='font-family:system-ui;padding:32px;color:%23555'><p>Paste a careers URL above and click Open.</p></body></html>"
+        ></webview>
+      </section>
+    </div>
 
     <dialog id="captureDialog">
       <form method="dialog">

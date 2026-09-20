@@ -15,7 +15,7 @@
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
     "dev:renderer": "vite",
-    "dev": "npm run build:main && npm run build:preload && concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "npm run build:main && npm run build:preload && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
     "start": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit"
   },

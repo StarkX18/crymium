@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld("huntboard", {
   googleDisconnect: () => ipcRenderer.invoke("google-disconnect"),
   initSpreadsheet: () => ipcRenderer.invoke("init-spreadsheet"),
   syncSheets: () => ipcRenderer.invoke("sync-sheets"),
-  careerNavigate: (url: string) => ipcRenderer.invoke("career-navigate", url),
+  getCaptureScript: () => ipcRenderer.invoke("get-capture-script"),
   saveQuestionBank: (payload: unknown) =>
     ipcRenderer.invoke("save-question-bank", payload),
   suggestMerge: (prompt: string) => ipcRenderer.invoke("suggest-merge", prompt),
