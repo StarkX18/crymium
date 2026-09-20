@@ -7,10 +7,17 @@ interface HuntboardApi {
   }>;
   saveSettings: (s: unknown) => Promise<unknown>;
   googleAuthStatus: () => Promise<{ connected: boolean; hasRefresh: boolean }>;
-  googleConnect: () => Promise<{ ok: boolean; error?: string }>;
+  googleConnect: (
+    partial?: FormSettings
+  ) => Promise<{ ok: boolean; error?: string }>;
   googleDisconnect: () => Promise<{ ok: boolean }>;
-  initSpreadsheet: () => Promise<{ ok: boolean; error?: string }>;
-  syncSheets: () => Promise<{ ok: boolean; error?: string }>;
+  initSpreadsheet: (
+    partial?: FormSettings
+  ) => Promise<{ ok: boolean; error?: string }>;
+  syncSheets: (partial?: FormSettings) => Promise<{ ok: boolean; error?: string }>;
+  healthCheck: (partial?: FormSettings) => Promise<{
+    steps: Array<{ id: string; ok: boolean; detail: string }>;
+  }>;
   getCaptureScript: () => Promise<string>;
   saveQuestionBank: (p: unknown) => Promise<{ ok: boolean; error?: string }>;
   suggestMerge: (prompt: string) => Promise<
@@ -27,6 +34,13 @@ interface HuntboardApi {
   }>;
   onFieldCaptured: (cb: (p: FieldCapture) => void) => () => void;
   onSyncComplete: (cb: (data: SyncData) => void) => () => void;
+}
+
+interface FormSettings {
+  spreadsheetId: string;
+  googleClientId: string;
+  googleClientSecret: string;
+  llmEnabled: boolean;
 }
 
 interface FieldCapture {
@@ -76,6 +90,20 @@ const captureMerge = document.getElementById("captureMerge") as HTMLSelectElemen
 let pendingCapture: FieldCapture | null = null;
 const dismissedPrompts = new Set<string>();
 
+function formSettings(): FormSettings {
+  return {
+    spreadsheetId: spreadsheetId.value.trim(),
+    googleClientId: clientId.value.trim(),
+    googleClientSecret: clientSecret.value.trim(),
+    llmEnabled: false,
+  };
+}
+
+function setStatus(message: string, isError = false): void {
+  authStatus.textContent = message;
+  authStatus.classList.toggle("error", isError);
+}
+
 function switchTab(name: string): void {
   document.querySelectorAll(".tabs button").forEach((b) => {
     b.classList.toggle("active", b.getAttribute("data-tab") === name);
@@ -93,9 +121,11 @@ document.querySelectorAll(".tabs button").forEach((btn) => {
 
 async function refreshAuthStatus(): Promise<void> {
   const st = await api.googleAuthStatus();
-  authStatus.textContent = st.connected
-    ? "Google Sheets: connected"
-    : "Google Sheets: not connected";
+  setStatus(
+    st.connected
+      ? "Google Sheets: connected"
+      : "Google Sheets: not connected (Connect after filling OAuth fields)"
+  );
 }
 
 async function loadSettingsIntoForm(): Promise<void> {
@@ -126,20 +156,18 @@ function applySyncData(data: SyncData): void {
 }
 
 document.getElementById("btnSaveSettings")!.addEventListener("click", async () => {
-  await api.saveSettings({
-    spreadsheetId: spreadsheetId.value.trim(),
-    googleClientId: clientId.value.trim(),
-    googleClientSecret: clientSecret.value.trim(),
-    llmEnabled: false,
-  });
-  authStatus.textContent = "Settings saved.";
+  await api.saveSettings(formSettings());
+  setStatus("Settings saved.");
 });
 
 document.getElementById("btnConnect")!.addEventListener("click", async () => {
-  const res = await api.googleConnect();
-  authStatus.textContent = res.ok
-    ? "Connected. Tokens stored in OS keychain when available."
-    : `Error: ${res.error}`;
+  const res = await api.googleConnect(formSettings());
+  setStatus(
+    res.ok
+      ? "Connected. Complete browser sign-in if a tab opened."
+      : `Error: ${res.error}`,
+    !res.ok
+  );
   await refreshAuthStatus();
 });
 
@@ -149,13 +177,35 @@ document.getElementById("btnDisconnect")!.addEventListener("click", async () => 
 });
 
 document.getElementById("btnInitSheet")!.addEventListener("click", async () => {
-  const res = await api.initSpreadsheet();
-  authStatus.textContent = res.ok ? "Sheet initialized." : `Error: ${res.error}`;
+  const res = await api.initSpreadsheet(formSettings());
+  setStatus(
+    res.ok
+      ? "Sheet initialized. Check Google Sheet for new tabs."
+      : `Error: ${res.error}`,
+    !res.ok
+  );
 });
 
 document.getElementById("btnSync")!.addEventListener("click", async () => {
-  const res = await api.syncSheets();
-  authStatus.textContent = res.ok ? "Synced." : `Error: ${res.error}`;
+  const res = await api.syncSheets(formSettings());
+  setStatus(res.ok ? "Synced from Sheet." : `Error: ${res.error}`, !res.ok);
+});
+
+const healthList = document.getElementById("healthList")!;
+document.getElementById("btnHealth")!.addEventListener("click", async () => {
+  const { steps } = await api.healthCheck(formSettings());
+  healthList.innerHTML = "";
+  for (const s of steps) {
+    const li = document.createElement("li");
+    li.className = s.ok ? "ok" : "fail";
+    li.textContent = s.detail;
+    healthList.appendChild(li);
+  }
+  const allOk = steps.every((s) => s.ok);
+  setStatus(
+    allOk ? "Setup looks good." : "Fix failed checks above.",
+    !allOk
+  );
 });
 
 type CareerWebview = HTMLElement & {
@@ -177,6 +227,11 @@ careerForm.addEventListener("submit", (e) => {
 careerView.addEventListener("did-navigate", (e) => {
   const ev = e as Event & { url?: string };
   if (ev.url && !ev.url.startsWith("data:")) careerUrl.value = ev.url;
+});
+
+careerView.addEventListener("did-fail-load", (e) => {
+  const ev = e as Event & { errorDescription?: string };
+  setStatus(`Page failed to load: ${ev.errorDescription ?? "unknown"}`, true);
 });
 
 let captureScript = "";
@@ -256,5 +311,6 @@ void (async () => {
   const cache = await api.getCache();
   if (cache.bank.length) renderBank(cache.bank);
   if (cache.templates.why_company) templateBody.value = cache.templates.why_company;
-  await api.syncSheets();
+  const res = await api.syncSheets(formSettings());
+  if (!res.ok) setStatus(res.error ?? "Sync failed", true);
 })();

@@ -4,10 +4,15 @@ contextBridge.exposeInMainWorld("huntboard", {
   getSettings: () => ipcRenderer.invoke("get-settings"),
   saveSettings: (settings: unknown) => ipcRenderer.invoke("save-settings", settings),
   googleAuthStatus: () => ipcRenderer.invoke("google-auth-status"),
-  googleConnect: () => ipcRenderer.invoke("google-connect"),
+  googleConnect: (partial?: unknown) =>
+    ipcRenderer.invoke("google-connect", partial),
   googleDisconnect: () => ipcRenderer.invoke("google-disconnect"),
-  initSpreadsheet: () => ipcRenderer.invoke("init-spreadsheet"),
-  syncSheets: () => ipcRenderer.invoke("sync-sheets"),
+  initSpreadsheet: (partial?: unknown) =>
+    ipcRenderer.invoke("init-spreadsheet", partial),
+  syncSheets: (partial?: unknown) =>
+    ipcRenderer.invoke("sync-sheets", partial),
+  healthCheck: (partial?: unknown) =>
+    ipcRenderer.invoke("health-check", partial),
   getCaptureScript: () => ipcRenderer.invoke("get-capture-script"),
   saveQuestionBank: (payload: unknown) =>
     ipcRenderer.invoke("save-question-bank", payload),

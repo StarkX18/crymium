@@ -23,6 +23,13 @@
 
         <section id="panel-setup" class="panel active">
           <h2>Google Sheets</h2>
+          <details class="scope">
+            <summary>What this prototype does (and doesn’t)</summary>
+            <ul>
+              <li><strong>Works:</strong> browse careers (right pane), Google login, create/sync Sheet tabs, edit template, save manual answers to Question bank.</li>
+              <li><strong>Not built yet:</strong> auto-apply, job scraping, daily scheduler, autofilling forms on portals.</li>
+            </ul>
+          </details>
           <p class="hint">
             Create a spreadsheet in Google Drive, copy its ID from the URL, and
             register an OAuth <strong>Desktop</strong> client in Google Cloud Console.
@@ -40,6 +47,8 @@
             <button type="button" id="btnInitSheet">Initialize tabs &amp; defaults</button>
             <button type="button" id="btnSync">Sync from Sheets</button>
           </div>
+          <button type="button" id="btnHealth" class="health-btn">Test setup</button>
+          <ul id="healthList" class="health-list"></ul>
         </section>
 
         <section id="panel-browse" class="panel">

@@ -185,3 +185,48 @@ dialog {
   padding: 24px;
   font-family: system-ui, sans-serif;
 }
+
+.scope {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: #444;
+}
+
+.scope ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.health-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.health-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+}
+
+.health-list li {
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+}
+
+.health-list li.ok::before {
+  content: "✓ ";
+  color: #16a34a;
+}
+
+.health-list li.fail::before {
+  content: "✗ ";
+  color: #dc2626;
+}
+
+.status.error {
+  color: #b91c1c;
+}

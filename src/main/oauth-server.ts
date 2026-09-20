@@ -47,9 +47,20 @@ export function startOAuthFlow(
         resolve({ tokens: {}, error: msg });
       }
     });
-    server.listen(PORT, "127.0.0.1");
-    import("electron").then(({ shell }) => {
-      shell.openExternal(authUrl);
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        resolve({
+          tokens: {},
+          error: `Port ${PORT} is in use. Quit other Huntboard windows and try Connect again.`,
+        });
+        return;
+      }
+      resolve({ tokens: {}, error: err.message });
+    });
+    server.listen(PORT, "127.0.0.1", () => {
+      import("electron").then(({ shell }) => {
+        shell.openExternal(authUrl);
+      });
     });
   });
 }

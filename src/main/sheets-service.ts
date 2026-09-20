@@ -44,18 +44,50 @@ export function applyTokens(
   client.setCredentials(tokens);
 }
 
+export async function persistClientTokens(
+  client: OAuth2Client,
+  save: (tokens: StoredTokens) => void
+): Promise<void> {
+  const creds = client.credentials;
+  if (creds.access_token || creds.refresh_token) {
+    save(creds as StoredTokens);
+  }
+}
+
 export async function ensureAuthorized(
   client: OAuth2Client,
-  tokens: StoredTokens | null
+  tokens: StoredTokens | null,
+  save?: (tokens: StoredTokens) => void
 ): Promise<boolean> {
   if (!tokens?.refresh_token && !tokens?.access_token) return false;
   client.setCredentials(tokens);
   try {
     await client.getAccessToken();
+    if (save) await persistClientTokens(client, save);
     return true;
   } catch {
     return false;
   }
+}
+
+export function formatSheetsError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/Unable to parse range|Unable to open spreadsheet|not found/i.test(msg)) {
+    return "Sheet tabs missing — click Initialize tabs & defaults first.";
+  }
+  if (/404|Requested entity was not found/i.test(msg)) {
+    return "Spreadsheet not found — check the Spreadsheet ID from the URL.";
+  }
+  if (/403|permission|PERMISSION_DENIED/i.test(msg)) {
+    return "No access to that spreadsheet — sign in with the Google account that owns the sheet.";
+  }
+  if (/redirect_uri_mismatch/i.test(msg)) {
+    return "OAuth redirect mismatch — use a Desktop client, or add http://127.0.0.1:42817/oauth2callback to your Web client.";
+  }
+  if (/invalid_client|invalid_grant/i.test(msg)) {
+    return "Invalid OAuth client ID/secret — check Google Cloud credentials and Save settings.";
+  }
+  return msg;
 }
 
 function sheetsApi(client: OAuth2Client): sheets_v4.Sheets {

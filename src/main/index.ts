@@ -19,7 +19,10 @@ import {
   appendQuestionBankRow,
   appendCaptureLog,
   updateTemplate,
+  formatSheetsError,
 } from "./sheets-service.js";
+import { persistSettings } from "./settings.js";
+import type { AppSettings } from "../shared/types.js";
 import { startOAuthFlow } from "./oauth-server.js";
 import { startScheduler, stopScheduler } from "./scheduler.js";
 import {
@@ -121,82 +124,162 @@ function createWindow(): void {
   void loadRenderer(mainWindow);
 }
 
-async function refreshCacheFromSheets(): Promise<void> {
+type SyncOutcome = { ok: true } | { ok: false; error: string };
+
+async function refreshCacheFromSheets(): Promise<SyncOutcome> {
   const settings = loadSettings();
-  if (!settings.spreadsheetId) return;
+  if (!settings.spreadsheetId) {
+    return { ok: false, error: "Set Spreadsheet ID, then Save settings." };
+  }
+  if (!settings.googleClientId || !settings.googleClientSecret) {
+    return { ok: false, error: "Set OAuth Client ID and secret, then Save settings." };
+  }
   const client = getOAuthClient();
   const tokens = loadTokens();
-  if (!(await ensureAuthorized(client, tokens))) return;
-  const data = await syncAllData(client, settings.spreadsheetId);
-  cache = {
-    profile: data.profile,
-    templates: data.templates,
-    bank: data.bank,
-  };
-  mainWindow?.webContents.send("sync-complete", {
-    profile: data.profile,
-    templates: Object.fromEntries(data.templates),
-    bank: data.bank,
-    portals: data.portals,
-    jobs: data.jobs,
+  if (!(await ensureAuthorized(client, tokens, saveTokens))) {
+    return { ok: false, error: "Not connected — click Connect Google." };
+  }
+  try {
+    const data = await syncAllData(client, settings.spreadsheetId);
+    cache = {
+      profile: data.profile,
+      templates: data.templates,
+      bank: data.bank,
+    };
+    mainWindow?.webContents.send("sync-complete", {
+      profile: data.profile,
+      templates: Object.fromEntries(data.templates),
+      bank: data.bank,
+      portals: data.portals,
+      jobs: data.jobs,
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: formatSheetsError(e) };
+  }
+}
+
+async function runHealthCheck(): Promise<{
+  steps: Array<{ id: string; ok: boolean; detail: string }>;
+}> {
+  const settings = loadSettings();
+  const steps: Array<{ id: string; ok: boolean; detail: string }> = [];
+
+  steps.push({
+    id: "settings",
+    ok: Boolean(
+      settings.spreadsheetId &&
+        settings.googleClientId &&
+        settings.googleClientSecret
+    ),
+    detail: settings.spreadsheetId
+      ? "Spreadsheet ID set"
+      : "Missing Spreadsheet ID or OAuth fields",
   });
+
+  const tokens = loadTokens();
+  const client = getOAuthClient();
+  const authed = await ensureAuthorized(client, tokens, saveTokens);
+  steps.push({
+    id: "google",
+    ok: authed,
+    detail: authed
+      ? "Google Sheets API authorized"
+      : "Not connected — Connect Google",
+  });
+
+  if (!authed || !settings.spreadsheetId) {
+    return { steps };
+  }
+
+  try {
+    await syncAllData(client, settings.spreadsheetId);
+    steps.push({
+      id: "sheet",
+      ok: true,
+      detail: "Read spreadsheet tabs OK",
+    });
+  } catch (e) {
+    steps.push({
+      id: "sheet",
+      ok: false,
+      detail: formatSheetsError(e),
+    });
+  }
+
+  return { steps };
 }
 
 function registerIpc(): void {
   ipcMain.handle("get-settings", () => loadSettings());
-  ipcMain.handle("save-settings", (_e, settings) => {
-    saveSettings(settings);
-    return loadSettings();
+  ipcMain.handle("save-settings", (_e, settings: AppSettings) => {
+    return persistSettings(settings);
   });
 
   ipcMain.handle("google-auth-status", async () => {
     const tokens = loadTokens();
     const client = getOAuthClient();
-    const ok = await ensureAuthorized(client, tokens);
+    const ok = await ensureAuthorized(client, tokens, saveTokens);
     return { connected: ok, hasRefresh: !!tokens?.refresh_token };
   });
 
-  ipcMain.handle("google-connect", async () => {
-    const settings = loadSettings();
-    if (!settings.googleClientId || !settings.googleClientSecret) {
-      return { ok: false, error: "Add Google OAuth client ID and secret in Settings." };
+  ipcMain.handle(
+    "google-connect",
+    async (_e, partial?: Partial<AppSettings>) => {
+      const settings = persistSettings(partial);
+      if (!settings.googleClientId || !settings.googleClientSecret) {
+        return {
+          ok: false,
+          error: "OAuth Client ID and secret required (then Connect).",
+        };
+      }
+      const client = createOAuthClient(settings);
+      const authUrl = getAuthUrl(client);
+      const result = await startOAuthFlow(client, authUrl);
+      if (result.error) return { ok: false, error: result.error };
+      if (!result.tokens.refresh_token && !result.tokens.access_token) {
+        return { ok: false, error: "No tokens returned from Google." };
+      }
+      saveTokens(result.tokens);
+      applyTokens(client, result.tokens);
+      return { ok: true };
     }
-    const client = getOAuthClient();
-    const authUrl = getAuthUrl(client);
-    const result = await startOAuthFlow(client, authUrl);
-    if (result.error) return { ok: false, error: result.error };
-    saveTokens(result.tokens);
-    applyTokens(client, result.tokens);
-    return { ok: true };
-  });
+  );
 
   ipcMain.handle("google-disconnect", () => {
     clearTokens();
     return { ok: true };
   });
 
-  ipcMain.handle("init-spreadsheet", async () => {
-    const settings = loadSettings();
-    if (!settings.spreadsheetId) {
-      return { ok: false, error: "Set spreadsheet ID first." };
+  ipcMain.handle(
+    "init-spreadsheet",
+    async (_e, partial?: Partial<AppSettings>) => {
+      const settings = persistSettings(partial);
+      if (!settings.spreadsheetId) {
+        return { ok: false, error: "Set Spreadsheet ID first." };
+      }
+      const client = getOAuthClient();
+      const tokens = loadTokens();
+      if (!(await ensureAuthorized(client, tokens, saveTokens))) {
+        return { ok: false, error: "Connect Google first." };
+      }
+      try {
+        await initializeSpreadsheet(client, settings.spreadsheetId);
+        return await refreshCacheFromSheets();
+      } catch (e) {
+        return { ok: false, error: formatSheetsError(e) };
+      }
     }
-    const client = getOAuthClient();
-    const tokens = loadTokens();
-    if (!(await ensureAuthorized(client, tokens))) {
-      return { ok: false, error: "Connect Google first." };
-    }
-    await initializeSpreadsheet(client, settings.spreadsheetId);
-    await refreshCacheFromSheets();
-    return { ok: true };
+  );
+
+  ipcMain.handle("sync-sheets", async (_e, partial?: Partial<AppSettings>) => {
+    if (partial) persistSettings(partial);
+    return await refreshCacheFromSheets();
   });
 
-  ipcMain.handle("sync-sheets", async () => {
-    try {
-      await refreshCacheFromSheets();
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
+  ipcMain.handle("health-check", async (_e, partial?: Partial<AppSettings>) => {
+    if (partial) persistSettings(partial);
+    return await runHealthCheck();
   });
 
   ipcMain.handle("get-capture-script", () => {
@@ -211,7 +294,7 @@ function registerIpc(): void {
     const settings = loadSettings();
     const client = getOAuthClient();
     const tokens = loadTokens();
-    if (!(await ensureAuthorized(client, tokens))) {
+    if (!(await ensureAuthorized(client, tokens, saveTokens))) {
       return { ok: false, error: "Not connected to Google." };
     }
     const id = `q_${Date.now()}`;
@@ -250,7 +333,7 @@ function registerIpc(): void {
     const settings = loadSettings();
     const client = getOAuthClient();
     const tokens = loadTokens();
-    if (!(await ensureAuthorized(client, tokens))) {
+    if (!(await ensureAuthorized(client, tokens, saveTokens))) {
       return { ok: false, error: "Not connected to Google." };
     }
     const version = (cache.templates.has(templateId) ? 2 : 1) + 1;

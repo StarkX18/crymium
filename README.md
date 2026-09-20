@@ -2,6 +2,20 @@
 
 Desktop job-hunt browser with a **persistent career session** (right pane) and **Google Sheets** as the system of record for profile, templates, question bank, portals, and job queue.
 
+## Honest scope
+
+This is a **working prototype** for **Sheets + browsing + templates + capture-to-bank**, not a job applier.
+
+| Works today | Not built yet |
+|-------------|----------------|
+| Embedded career browser (persistent session) | Auto-apply on Greenhouse / company portals |
+| Google OAuth + read/write your spreadsheet | Daily scheduler / job queue runner |
+| Initialize Sheet tabs + sync Profile/Templates/Bank | Autofill application forms |
+| Edit `why_company` template → Sheet | LinkedIn Easy Apply |
+| Prompt to save manual field answers → QuestionBank | Portal adapters (`listJobs`, etc.) |
+
+Use **Test setup** in the app after filling fields; it reports what failed.
+
 ## What’s in this MVP
 
 - Electron app: sidebar (setup, browse, templates, bank) + `BrowserView` on partition `persist:huntboard-careers`
