@@ -27,7 +27,11 @@ Share the sheet only with your account (it will contain application answers).
 
 ## Run locally
 
+Use **Node 20 or 22 LTS** (not Node 25/26). Electron downloads a platform binary during `npm install`; that step is what failed if you see `Electron failed to install correctly`.
+
 ```bash
+nvm install 22
+nvm use 22
 npm install
 npm run dev
 ```
@@ -38,6 +42,21 @@ Production build:
 npm run build
 npm start
 ```
+
+### Electron failed to install correctly
+
+The `electron` npm package is a downloader. If `install.js` is skipped (npm 10+ backgrounds scripts; Node 26 is untested), `node_modules/electron` has no Chromium binary.
+
+```bash
+nvm use 22
+rm -rf node_modules/electron
+npm install --foreground-scripts
+# or, if electron is already listed in node_modules:
+npm run fix:electron
+npm run dev
+```
+
+You need network access to GitHub releases (`github.com/electron/electron/releases`). LinkedIn Easy Apply is out of scope for now.
 
 ## Sheet columns
 
