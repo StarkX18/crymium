@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Huntboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Huntboard</h1>
+      <p class="tagline">Sheets-backed queue · persistent career session</p>
+    </header>
+
+    <nav class="tabs">
+      <button type="button" data-tab="setup" class="active">Setup</button>
+      <button type="button" data-tab="browse">Browse</button>
+      <button type="button" data-tab="templates">Templates</button>
+      <button type="button" data-tab="bank">Question bank</button>
+    </nav>
+
+    <section id="panel-setup" class="panel active">
+      <h2>Google Sheets</h2>
+      <p class="hint">
+        Create a spreadsheet in Google Drive, copy its ID from the URL, and
+        register an OAuth <strong>Desktop</strong> client in Google Cloud Console.
+      </p>
+      <label>Spreadsheet ID <input id="spreadsheetId" type="text" /></label>
+      <label>OAuth Client ID <input id="clientId" type="text" /></label>
+      <label>OAuth Client secret <input id="clientSecret" type="password" /></label>
+      <div class="row">
+        <button type="button" id="btnSaveSettings">Save settings</button>
+        <button type="button" id="btnConnect" class="primary">Connect Google</button>
+        <button type="button" id="btnDisconnect">Disconnect</button>
+      </div>
+      <p id="authStatus" class="status"></p>
+      <div class="row">
+        <button type="button" id="btnInitSheet">Initialize tabs &amp; defaults</button>
+        <button type="button" id="btnSync">Sync from Sheets</button>
+      </div>
+    </section>
+
+    <section id="panel-browse" class="panel">
+      <h2>Career browser</h2>
+      <p class="hint">Log into portals on the right. Sessions persist in this app.</p>
+      <label>URL <input id="careerUrl" type="url" placeholder="https://boards.greenhouse.io/..." /></label>
+      <button type="button" id="btnGo" class="primary">Open</button>
+    </section>
+
+    <section id="panel-templates" class="panel">
+      <h2>Templates</h2>
+      <label for="templateSelect">Template</label>
+      <select id="templateSelect"><option value="why_company">why_company</option></select>
+      <textarea id="templateBody" rows="12"></textarea>
+      <button type="button" id="btnSaveTemplate" class="primary">Save to Sheet</button>
+    </section>
+
+    <section id="panel-bank" class="panel">
+      <h2>Question bank</h2>
+      <p id="bankCount" class="status">Sync to load entries.</p>
+      <ul id="bankList"></ul>
+    </section>
+
+    <dialog id="captureDialog">
+      <form method="dialog">
+        <h3>Save for similar questions?</h3>
+        <p id="capturePrompt" class="capture-prompt"></p>
+        <textarea id="captureAnswer" rows="6"></textarea>
+        <label>Merge with existing
+          <select id="captureMerge"><option value="">— New entry —</option></select>
+        </label>
+        <div class="row">
+          <button type="submit" id="captureSave" class="primary">Save to Sheet</button>
+          <button type="button" id="captureDismiss">This job only</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

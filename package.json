@@ -1,0 +1,28 @@
+{
+  "name": "huntboard",
+  "version": "0.1.0",
+  "description": "Job hunt browser with Google Sheets queue, profile, and question bank",
+  "main": "dist-main/main/index.js",
+  "type": "module",
+  "scripts": {
+    "build:main": "tsc -p tsconfig.main.json && cp -r src/main/inject dist-main/main/inject",
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer",
+    "dev:renderer": "vite",
+    "dev": "npm run build:main && npm run build:preload && concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "wait-on": "^8.0.1"
+  }
+}
